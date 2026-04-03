@@ -1,0 +1,52 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# ESP-IDF / CMake build output
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+compile_commands.json
+
+# Generated firmware / tool artifacts
+*.bin
+*.elf
+*.map
+*.o
+*.a
+flasher_args.json
+
+# ESP-IDF generated config state
+sdkconfig
+sdkconfig.old
+
+# ESP-IDF component manager downloads / locks
+managed_components/
+
+# Local tool folders if ever created inside the repo
+.espressif/
+
+# IDE / local workspace files
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch/
+*.code-workspace
+*.suo
+*.user
+*.sln.docstates
