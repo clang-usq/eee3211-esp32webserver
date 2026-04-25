@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Garden Monitoring System</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main class="dashboard">
+    <h1>Garden Monitoring System</h1>
+    <label class="toolbar" for="lastTimeCheckbox">
+      <span>Show Last Updated</span>
+      <input id="lastTimeCheckbox" type="checkbox">
+    </label>
+    <p class="status" id="status">Loading data...</p>
+
+    <div class="card" aria-label="Wind details">
+      <h2>Wind</h2>
+      <p>
+        <span id="windSpeed">-- </span> m/s
+      </p>
+      <p>
+        <span id="windDirection">--</span> Degrees
+      </p>
+      <p>
+        <span class="hide" id="windDataLastUpdated"> --</span>
+      </p>
+    </div>
+
+    <div class="card" aria-label="Humidity">
+      <h2>Humidity</h2>
+      <p><span id="humidity">-- </span>%</p>
+      <p><span class="hide" id="humidityLastUpdated">--</span></p>
+    </div>
+
+    <div class="card" aria-label="Rain chance">
+      <h2>Rain</h2>
+      <p><span id="rain">-- </span>mm</p>
+      <p><span class="hide" id="rainLastUpdated">--</span></p>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

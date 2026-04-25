@@ -4,22 +4,32 @@
 #include <ESPmDNS.h>
 #include "esp_log.h"
 #include <esp_now.h>
+#include "time.h"
+
+#include "config.h"
+
 
 static const char *TAG = "garden";
-constexpr char kWifiSsid[] = "Deco_Guest";
-constexpr char kWifiPassword[] = "";
+
+//used guest wifi creds
+
 constexpr char kMdnsHostname[] = "gardenmonitoringstation";
 constexpr unsigned long kWifiConnectTimeoutMs = 15000;
 
+//create server object
 WebServer server(80);
+
+
 
 //this is the full data store used by the webpage/api
 struct SensorData {
     float humidity;
+    uint32_t humidityReceived;
     float windSpeed;
     int windDirection;
+    uint32_t windDataReceived;
     float rain;
-    uint32_t lastUpdate;
+    uint32_t rainReceived;
 };
 
 //Rainfall ID-1, Wind ID-2, Humidity ID-3
@@ -39,7 +49,6 @@ struct SensorPacket {
 
 //store the latest received sensor values here
 SensorData latestData = {0};
-bool hasSensorData = false;
 
 
 void logRequest(const char* routeName) {
@@ -54,7 +63,10 @@ void onEspNowRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len)
     if (len != sizeof(SensorPacket)) {
         ESP_LOGI(TAG, "ESP-NOW packet size mismatch: %d", len);
         return;
+
     }
+    //create NTP time object
+    time_t now = time(NULL);
 
     //copy the wind packet into a local struct first
     SensorPacket packet;
@@ -65,20 +77,20 @@ void onEspNowRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len)
         case SENSOR_WIND: // wind
             latestData.windSpeed = packet.value1;
             latestData.windDirection = (int)packet.value2;
-            latestData.lastUpdate = millis();
+            latestData.windDataReceived = (uint32_t) now;
             ESP_LOGI(TAG, "Wind update speed=%.2f dir=%d",
                     latestData.windSpeed, latestData.windDirection);
             break;
 
         case SENSOR_HUMIDITY: // humidity
             latestData.humidity = packet.value1;
-            latestData.lastUpdate = millis();
+            latestData.humidityReceived = (uint32_t) now;
             ESP_LOGI(TAG, "Humidity update %.2f", latestData.humidity);
             break;
 
         case SENSOR_RAINFALL: // rainfall
             latestData.rain = packet.value1;
-            latestData.lastUpdate = millis();
+            latestData.rainReceived = (uint32_t) now;
             ESP_LOGI(TAG, "Rain update %.2f", latestData.rain);
             break;
 
@@ -86,9 +98,6 @@ void onEspNowRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len)
             ESP_LOGI(TAG, "Unknown sensor id: %d", packet.sensorId);
             break;
     }   
-
-    hasSensorData = true;
-
 
     ESP_LOGI(TAG,
             "ESP-NOW wind recv from %02X:%02X:%02X:%02X:%02X:%02X speed=%.2f direction=%d",
@@ -116,134 +125,344 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     }
 }
 
+
+//html - css and js put into memory
 const char html[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Garden Monitoring System</title>
-    <link rel="stylesheet" href="/app.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Garden Monitoring System</title>
+  <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-    <main class="dashboard">
-        <h1>Garden Monitoring System</h1>
+  <main class="dashboard">
+    <h1>Garden Monitoring System</h1>
+    <label class="toolbar" for="lastTimeCheckbox">
+      <span>Show Last Updated</span>
+      <input id="lastTimeCheckbox" type="checkbox">
+    </label>
+    <p class="status" id="status">Loading data...</p>
 
     <div class="card" aria-label="Wind details">
-        <h2>Wind</h2>
-        <p><span id="windSpeed"></span> m/s <span id="windDirection"></span> degrees</p>
+      <h2>Wind</h2>
+      <p>
+        <span id="windSpeed">-- </span> m/s
+      </p>
+      <p>
+        <span id="windDirection">--</span> Degrees
+      </p>
+      <p>
+        <span class="hide" id="windDataLastUpdated"> --</span>
+      </p>
     </div>
 
     <div class="card" aria-label="Humidity">
-        <h2>Humidity</h2>
-        <p><span id="humidity">64</span>%</p>
+      <h2>Humidity</h2>
+      <p><span id="humidity">-- </span>%</p>
+      <p><span class="hide" id="humidityLastUpdated">--</span></p>
     </div>
 
     <div class="card" aria-label="Rain chance">
-        <h2>Rain</h2>
-        <p><span id="rain">10</span>mm</p>
+      <h2>Rain</h2>
+      <p><span id="rain">-- </span>mm</p>
+      <p><span class="hide" id="rainLastUpdated">--</span></p>
     </div>
-    <div class="card" aria-label="Last updated">
-        <h2>Last Updated</h2>
-        <p><span id="lastUpdate"></span></p>
-    </div>
-    </main>
+  </main>
 
-    <script src="/app.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
-
 )HTML";
 
 const char kAppCss[] PROGMEM = R"CSS(
+/* app.css */
+
+:root {
+  --bg-main: #101815;
+  --bg-panel: #18231f;
+  --bg-card: #1f3029;
+  --bg-card-alt: #243a31;
+
+  --text-main: #ecfff5;
+  --text-muted: #a8c7b8;
+
+  --accent: #42d97c;
+  --accent-soft: rgba(66, 217, 124, 0.18);
+  --warning: #f2c94c;
+  --danger: #eb5757;
+
+  --border: rgba(255, 255, 255, 0.12);
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+
+  --radius-lg: 22px;
+  --radius-md: 14px;
+}
+
+/* Reset */
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+}
+
+html {
+  font-size: 16px;
 }
 
 body {
+  margin: 0;
   min-height: 100vh;
-  padding: 12px;
-  background: linear-gradient(180deg, #dff5d7 0%, #9ed28f 48%, #5f9f5c 100%);
-  font-family: sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(66, 217, 124, 0.18), transparent 35%),
+    linear-gradient(135deg, #0b120f, var(--bg-main));
+  color: var(--text-main);
 }
 
+/* Dashboard shell */
 .dashboard {
-  width: min(100%, 420px);
-  min-height: calc(100vh - 24px);
+  width: min(1100px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 12px;
-  background: rgba(252, 252, 252, 0.92);
-  border-radius: 18px;
-  box-shadow: 0 16px 40px rgba(34, 76, 31, 0.18);
+  padding: 32px 0;
+
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
 }
 
-h1 {
-  margin: 0 0 12px;
-  font-size: 1.2rem;
-  color: #1f3a1d;
+/* Header spans full dashboard */
+.dashboard h1 {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 24px 28px;
+
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  background: linear-gradient(135deg, var(--bg-panel), #203b30);
+  border: 1px solid var(--border);
+  border-left: 8px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
 }
 
-.card {
-  margin-bottom: 10px;
-  padding: 12px;
-  border: none;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 8px 22px rgba(46, 87, 42, 0.12);
-}
+/* Toolbar */
+.toolbar {
+  grid-column: 1 / -1;
 
-h2,
-.card p {
-  margin: 0 0 4px;
-}
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
 
-h2 {
-  font-size: 0.95rem;
-  color: #365a31;
-}
+  min-height: 64px;
+  padding: 16px 22px;
 
-.card p {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+
+  color: var(--text-muted);
   font-size: 1rem;
-  color: #1f2b1f;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-@media (max-width: 320px) {
-  body {
-    padding: 8px;
-  }
+.toolbar input[type="checkbox"] {
+  width: 48px;
+  height: 28px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
+/* System status */
+.status {
+  grid-column: 1 / -1;
+
+  margin: 0;
+  padding: 14px 18px;
+
+  color: var(--warning);
+  background: rgba(242, 201, 76, 0.12);
+  border: 1px solid rgba(242, 201, 76, 0.28);
+  border-radius: var(--radius-md);
+
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* Cards */
+.card {
+  position: relative;
+  min-height: 230px;
+  padding: 24px;
+
+  background:
+    linear-gradient(180deg, var(--bg-card-alt), var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+
+  overflow: hidden;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 6px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+.card h2 {
+  margin: 0 0 24px;
+
+  color: var(--accent);
+  font-size: 1.2rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card p {
+  margin: 14px 0;
+
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+/* Live values */
+.card p:first-of-type span:not(.hide),
+.card p:nth-of-type(2) span:not(.hide) {
+  color: var(--text-main);
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Last updated values */
+.hide {
+  display: none;
+}
+
+.show,
+.hide:not(:empty) {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* Optional: use this if JS toggles a parent class */
+.dashboard.show-last-updated .hide {
+  display: inline;
+}
+
+/* Focus states for HMI/touch accessibility */
+input:focus-visible,
+.toolbar:focus-within,
+.card:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Tablet displays */
+@media (max-width: 850px) {
   .dashboard {
-    min-height: calc(100vh - 16px);
-    padding: 10px;
-  }
-
-  h1 {
-    font-size: 1.05rem;
+    grid-template-columns: 1fr 1fr;
+    width: min(100% - 24px, 760px);
+    gap: 16px;
+    padding: 24px 0;
   }
 
   .card {
-    padding: 10px;
+    min-height: 210px;
+    padding: 20px;
+  }
+
+  .dashboard h1 {
+    padding: 20px;
   }
 }
 
-@media (min-width: 768px) {
-  body {
-    padding: 24px;
+/* Small HMI panels / phones */
+@media (max-width: 560px) {
+  html {
+    font-size: 15px;
   }
 
   .dashboard {
-    width: min(100%, 560px);
+    grid-template-columns: 1fr;
+    width: min(100% - 20px, 420px);
+    gap: 14px;
+    padding: 16px 0;
+  }
+
+  .dashboard h1 {
+    padding: 18px;
+    border-left-width: 6px;
+    text-align: center;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 16px;
+  }
+
+  .toolbar input[type="checkbox"] {
+    align-self: center;
+    width: 56px;
+    height: 32px;
+  }
+
+  .status {
+    text-align: center;
+  }
+
+  .card {
+    min-height: 180px;
     padding: 18px;
   }
 
-  h1 {
-    font-size: 1.45rem;
+  .card h2 {
+    margin-bottom: 18px;
+    font-size: 1.1rem;
+  }
+
+  .card p {
+    margin: 10px 0;
+  }
+}
+
+/* Very small embedded displays */
+@media (max-width: 360px) {
+  .dashboard {
+    width: calc(100% - 12px);
+    gap: 10px;
+    padding: 10px 0;
+  }
+
+  .dashboard h1 {
+    font-size: 1.35rem;
+    padding: 14px;
+  }
+
+  .toolbar,
+  .status,
+  .card {
+    border-radius: 12px;
   }
 
   .card {
+    min-height: 160px;
     padding: 14px;
+  }
+
+  .card p:first-of-type span:not(.hide),
+  .card p:nth-of-type(2) span:not(.hide) {
+    font-size: 2rem;
   }
 }
 
@@ -253,30 +472,75 @@ const char kAppJs[] PROGMEM = R"JS(
 
 console.log('Loaded Garden Monitoring System');
 
+const lastTimeCheckbox = document.getElementById("lastTimeCheckbox");
+if (lastTimeCheckbox) {
+    lastTimeCheckbox.addEventListener("change", checkboxUpdated);
+}
+
 /**
- * Weather dashboard data.
+ * Weather dashboard data
  * @typedef {Object} weatherData
- * @property {number} humidity - Relative humidity.
- * @property {number} windSpeed - Wind speed.
- * @property {string} windDirection - Wind direction.
- * @property {number} rain - Rain amount.
+ * @property {number} humidity - Relative humidity
+ * @property {number} humidityReceived
+ * @property {number} windSpeed - Wind speed
+ * @property {string} windDirection - Wind direction
+ * @property {number} windDataReceived
+ * @property {number} rain - Rain amount
+ * @property {number} rainReceived
  */
+
 
 /**
  * @param {weatherData} data
  */
 function updateDashboard(data) {
-    document.getElementById("humidity").textContent = data.humidity;
-    document.getElementById("windSpeed").textContent = data.windSpeed;
-    document.getElementById("windDirection").textContent = data.windDirection;
-    document.getElementById("rain").textContent = data.rain;
-    document.getElementById("lastUpdate").textContent = data.lastUpdate;
+    const options = {
+        weekday: "short",
+        year : "numeric",
+        month : "short",
+        hour : "numeric",
+        minute : "numeric",
+        second : "numeric",
+        hour12 : false,
+    }
+    const humidityTime = new Date(data.humidityReceived * 1000);
+    const windDataTime =  new Date(data.windDataReceived * 1000);
+    const rainTime =  new Date(data.rainReceived * 1000);
+
+    document.getElementById("humidity").textContent = data.humidityReceived ? data.humidity : "--";
+
+    if(!data.humidityReceived){
+        document.getElementById('humidityLastUpdated').textContent = "--";
+    } else {
+        document.getElementById('humidityLastUpdated').textContent = humidityTime.toLocaleString("en-AU", options);
+    };
+
+    document.getElementById("windSpeed").textContent = data.windDataReceived ? data.windSpeed : "--";
+    document.getElementById("windDirection").textContent = data.windDataReceived ? data.windDirection : "--";
+    if(!data.windDataReceived){
+        document.getElementById('windDataLastUpdated').textContent = "--";
+    } else {
+        document.getElementById('windDataLastUpdated').textContent = windDataTime.toLocaleString("en-AU", options);
+    };
+
+    document.getElementById("rain").textContent = data.rainReceived ? data.rain : "--";
+
+    if(!data.rainReceived){
+        document.getElementById('rainLastUpdated').textContent = "--";
+    } else {
+        document.getElementById('rainLastUpdated').textContent = rainTime.toLocaleString("en-AU", options);
+    };
+
 }
 
+function setStatus(message) {
+    document.getElementById("status").textContent = message;
+}
 
 // fetch request to API endpoint
 async function requestWeather(){
     const response = await fetch("/v1/data/");
+
     //log an error if status is not 200. 
     if (!response.ok) {
         throw new Error(`Error: ${response.status}`);
@@ -285,28 +549,32 @@ async function requestWeather(){
     return response.json();
 }
 
-//pass the json response here to format data to send to updateDashboard
-function parseJson(data) {
-    return {
-        humidity: data.humidity ?? "--",
-        windSpeed: data.windSpeed ?? "--",
-        windDirection: data.windDirection ?? "--",
-        rain: data.rain ?? "--",
-        lastUpdate: data.lastUpdate ?? new Date().toLocaleTimeString(),
-    };
+function checkboxUpdated(){
+    const showLastUpdated = Boolean(lastTimeCheckbox?.checked);
+
+    document.getElementById('humidityLastUpdated').classList.toggle('hide', !showLastUpdated);
+    document.getElementById('rainLastUpdated').classList.toggle('hide', !showLastUpdated);
+    document.getElementById('windDataLastUpdated').classList.toggle('hide', !showLastUpdated);
+
 }
 
 async function refreshDashboard() {
     try {
         const response = await requestWeather();
-        updateDashboard(parseJson(response));
+        updateDashboard(response);
+        setStatus("Live API data");
     } catch (error) {
         console.error("Failed to fetch weather data", error);
+        // updateDashboard(FALLBACK_DATA);
+        // setStatus("Offline demo data");
     }
 }
 
 refreshDashboard();
 setInterval(refreshDashboard, 5000);
+
+
+
 
 )JS";
 
@@ -317,20 +585,33 @@ String buildDataJson() {
     json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
     json += "\"uptime_ms\":" + String(millis()) + ",";
     json += "\"humidity\":";
-    json += hasSensorData ? String(latestData.humidity) : "null";
+    json += latestData.humidityReceived ? String(latestData.humidity) : "null";
     json += ",";
+
+    json += "\"humidityReceived\":";
+    json += latestData.humidityReceived ? String(latestData.humidityReceived) : "null";
+    json += ",";
+
     json += "\"windSpeed\":";
-    json += hasSensorData ? String(latestData.windSpeed) : "null";
+    json += latestData.windDataReceived ? String(latestData.windSpeed) : "null";
     json += ",";
     json += "\"windDirection\":";
-    json += hasSensorData ? String(latestData.windDirection) : "null";
+    json += latestData.windDataReceived ? String(latestData.windDirection) : "null";
     json += ",";
+
+    json += "\"windDataReceived\":";
+    json += latestData.windDataReceived ? String(latestData.windDataReceived) : "null";
+    json += ",";
+
     json += "\"rain\":";
-    json += hasSensorData ? String(latestData.rain) : "null";
+    json += latestData.rainReceived ? String(latestData.rain) : "null";
     json += ",";
-    json += "\"lastUpdate\":";
-    json += hasSensorData ? String(latestData.lastUpdate) : "null";
+
+    json += "\"rainReceived\":";
+    json += latestData.rainReceived ? String(latestData.rainReceived) : "null";
+
     json += "}";
+
     return json;
 }
 
@@ -385,6 +666,10 @@ bool connectToWifi() {
 
     ESP_LOGI(TAG, "Wi-Fi connected");
     ESP_LOGI(TAG, "Wi-Fi IP: %s", WiFi.localIP().toString().c_str());
+
+    //get ntp time
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
     return true;
 }
 

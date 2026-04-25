@@ -50,3 +50,7 @@ managed_components/
 *.suo
 *.user
 *.sln.docstates
+
+# Local config files for SSID/wifi
+**/config.h
+

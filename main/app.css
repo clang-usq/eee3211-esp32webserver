@@ -1,0 +1,288 @@
+/* app.css */
+
+:root {
+  --bg-main: #101815;
+  --bg-panel: #18231f;
+  --bg-card: #1f3029;
+  --bg-card-alt: #243a31;
+
+  --text-main: #ecfff5;
+  --text-muted: #a8c7b8;
+
+  --accent: #42d97c;
+  --accent-soft: rgba(66, 217, 124, 0.18);
+  --warning: #f2c94c;
+  --danger: #eb5757;
+
+  --border: rgba(255, 255, 255, 0.12);
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+
+  --radius-lg: 22px;
+  --radius-md: 14px;
+}
+
+/* Reset */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(66, 217, 124, 0.18), transparent 35%),
+    linear-gradient(135deg, #0b120f, var(--bg-main));
+  color: var(--text-main);
+}
+
+/* Dashboard shell */
+.dashboard {
+  width: min(1100px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0;
+
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+/* Header spans full dashboard */
+.dashboard h1 {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 24px 28px;
+
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  background: linear-gradient(135deg, var(--bg-panel), #203b30);
+  border: 1px solid var(--border);
+  border-left: 8px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+/* Toolbar */
+.toolbar {
+  grid-column: 1 / -1;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+
+  min-height: 64px;
+  padding: 16px 22px;
+
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+
+  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.toolbar input[type="checkbox"] {
+  width: 48px;
+  height: 28px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* System status */
+.status {
+  grid-column: 1 / -1;
+
+  margin: 0;
+  padding: 14px 18px;
+
+  color: var(--warning);
+  background: rgba(242, 201, 76, 0.12);
+  border: 1px solid rgba(242, 201, 76, 0.28);
+  border-radius: var(--radius-md);
+
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* Cards */
+.card {
+  position: relative;
+  min-height: 230px;
+  padding: 24px;
+
+  background:
+    linear-gradient(180deg, var(--bg-card-alt), var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+
+  overflow: hidden;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 6px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+.card h2 {
+  margin: 0 0 24px;
+
+  color: var(--accent);
+  font-size: 1.2rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card p {
+  margin: 14px 0;
+
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+/* Live values */
+.card p:first-of-type span:not(.hide),
+.card p:nth-of-type(2) span:not(.hide) {
+  color: var(--text-main);
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Last updated values */
+.hide {
+  display: none;
+}
+
+.show,
+.hide:not(:empty) {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* Optional: use this if JS toggles a parent class */
+.dashboard.show-last-updated .hide {
+  display: inline;
+}
+
+/* Focus states for HMI/touch accessibility */
+input:focus-visible,
+.toolbar:focus-within,
+.card:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Tablet displays */
+@media (max-width: 850px) {
+  .dashboard {
+    grid-template-columns: 1fr 1fr;
+    width: min(100% - 24px, 760px);
+    gap: 16px;
+    padding: 24px 0;
+  }
+
+  .card {
+    min-height: 210px;
+    padding: 20px;
+  }
+
+  .dashboard h1 {
+    padding: 20px;
+  }
+}
+
+/* Small HMI panels / phones */
+@media (max-width: 560px) {
+  html {
+    font-size: 15px;
+  }
+
+  .dashboard {
+    grid-template-columns: 1fr;
+    width: min(100% - 20px, 420px);
+    gap: 14px;
+    padding: 16px 0;
+  }
+
+  .dashboard h1 {
+    padding: 18px;
+    border-left-width: 6px;
+    text-align: center;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 16px;
+  }
+
+  .toolbar input[type="checkbox"] {
+    align-self: center;
+    width: 56px;
+    height: 32px;
+  }
+
+  .status {
+    text-align: center;
+  }
+
+  .card {
+    min-height: 180px;
+    padding: 18px;
+  }
+
+  .card h2 {
+    margin-bottom: 18px;
+    font-size: 1.1rem;
+  }
+
+  .card p {
+    margin: 10px 0;
+  }
+}
+
+/* Very small embedded displays */
+@media (max-width: 360px) {
+  .dashboard {
+    width: calc(100% - 12px);
+    gap: 10px;
+    padding: 10px 0;
+  }
+
+  .dashboard h1 {
+    font-size: 1.35rem;
+    padding: 14px;
+  }
+
+  .toolbar,
+  .status,
+  .card {
+    border-radius: 12px;
+  }
+
+  .card {
+    min-height: 160px;
+    padding: 14px;
+  }
+
+  .card p:first-of-type span:not(.hide),
+  .card p:nth-of-type(2) span:not(.hide) {
+    font-size: 2rem;
+  }
+}
