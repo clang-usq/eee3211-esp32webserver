@@ -16,6 +16,9 @@ static const char *TAG = "garden";
 constexpr char kMdnsHostname[] = "gardenmonitoringstation";
 constexpr unsigned long kWifiConnectTimeoutMs = 15000;
 
+//added in this for the dummy dashboard - true and returns dummy api values
+constexpr bool kUseDummyDashboardData = true;
+
 //create server object
 WebServer server(80);
 
@@ -49,6 +52,25 @@ struct SensorPacket {
 
 //store the latest received sensor values here
 SensorData latestData = {0};
+
+
+//exmaple data struct for dummy values 
+SensorData getDashboardData() {
+    if (kUseDummyDashboardData) {
+        const uint32_t now = (uint32_t)time(NULL);
+        return SensorData{
+            61.5f,
+            now,
+            3.8f,
+            245,
+            now,
+            1.2f,
+            now
+        };
+    }
+
+    return latestData;
+}
 
 
 void logRequest(const char* routeName) {
@@ -95,6 +117,7 @@ void onEspNowRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len)
             break;
 
         default:
+        //use this is sensor ID is not mapped
             ESP_LOGI(TAG, "Unknown sensor id: %d", packet.sensorId);
             break;
     }   
@@ -161,12 +184,14 @@ const char html[] PROGMEM = R"HTML(
     <div class="card" aria-label="Humidity">
       <h2>Humidity</h2>
       <p><span id="humidity">-- </span>%</p>
+      <p><span aria-hidden="true"></span></p>
       <p><span class="hide" id="humidityLastUpdated">--</span></p>
     </div>
 
     <div class="card" aria-label="Rain chance">
       <h2>Rain</h2>
       <p><span id="rain">-- </span>mm</p>
+      <p><span aria-hidden="true"></span></p>
       <p><span class="hide" id="rainLastUpdated">--</span></p>
     </div>
   </main>
@@ -579,36 +604,37 @@ setInterval(refreshDashboard, 5000);
 )JS";
 
 String buildDataJson() {
+    const SensorData data = getDashboardData();
     String json = "{";
     json += "\"device\":\"esp32c6\",";
     json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
     json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
     json += "\"uptime_ms\":" + String(millis()) + ",";
     json += "\"humidity\":";
-    json += latestData.humidityReceived ? String(latestData.humidity) : "null";
+    json += data.humidityReceived ? String(data.humidity) : "null";
     json += ",";
 
     json += "\"humidityReceived\":";
-    json += latestData.humidityReceived ? String(latestData.humidityReceived) : "null";
+    json += data.humidityReceived ? String(data.humidityReceived) : "null";
     json += ",";
 
     json += "\"windSpeed\":";
-    json += latestData.windDataReceived ? String(latestData.windSpeed) : "null";
+    json += data.windDataReceived ? String(data.windSpeed) : "null";
     json += ",";
     json += "\"windDirection\":";
-    json += latestData.windDataReceived ? String(latestData.windDirection) : "null";
+    json += data.windDataReceived ? String(data.windDirection) : "null";
     json += ",";
 
     json += "\"windDataReceived\":";
-    json += latestData.windDataReceived ? String(latestData.windDataReceived) : "null";
+    json += data.windDataReceived ? String(data.windDataReceived) : "null";
     json += ",";
 
     json += "\"rain\":";
-    json += latestData.rainReceived ? String(latestData.rain) : "null";
+    json += data.rainReceived ? String(data.rain) : "null";
     json += ",";
 
     json += "\"rainReceived\":";
-    json += latestData.rainReceived ? String(latestData.rainReceived) : "null";
+    json += data.rainReceived ? String(data.rainReceived) : "null";
 
     json += "}";
 
