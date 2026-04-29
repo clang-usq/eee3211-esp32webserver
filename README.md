@@ -130,8 +130,8 @@ Current value mapping:
 Make sure sender and receiver use the exact same packet structure.
 
 ## Notes
-![Webserver Dashboard](GMS_desktop.jpg)
-![Webserver Dashboard](GMS_mobile.jpg)
+![Webserver Dashboard](GMS_desktop.png)
+![Webserver Dashboard](GMS_mobile.png)
 ![SerialMonitor](serial_monitor.png)
 
 - `managed_components/`, `build/`, and `sdkconfig` are ignored in Git
